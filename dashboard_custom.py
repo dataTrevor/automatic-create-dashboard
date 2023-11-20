@@ -6,7 +6,7 @@
 ###  into each widget of the dashboard.
 #### Function3: Download the cloudWatch dashboard to a local json file as template. --unload option
 #### prerequisite: you need configure ak/sk in AWS CLI first, and make sure you have privileges to call aws SDK api.
-#### created by chuanjin@amazon.com , 2023-10-16
+#### created by king_516@126.com , 2023-10-16
 ########################
 import boto3
 import json
