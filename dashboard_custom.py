@@ -4,7 +4,7 @@
 ###  into each widget of the created dashboard. --init option
 #### Function2: Customer created a dashboard from aws cloudwatch console or Function1, and selected one RDS cluster as template, after that, customer can add a instance or many instances
 ###  into each widget of the dashboard.
-#### Function3: Download the cloudWatch dashboard to a local json file as template. --unload option
+#### Function3: Download the cloudWatch dashboard to a local json file as template. --download option
 #### prerequisite: you need configure ak/sk in AWS CLI first, and make sure you have privileges to call aws SDK api.
 #### created by king_516@126.com , 2023-10-16
 ########################
@@ -15,15 +15,21 @@ import argparse
 
 def args_parse():
     parser = argparse.ArgumentParser(description='Create CloudWatch Dashboard automatically')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--init', '-i', action='store_true', help='Create a new dashboard in cloudWatch as local json dashboard body , optional')
+    group.add_argument('--update', '-u', action='store_true', help='update dashboard in cloudWatch to add more clusters , optional')
+    group.add_argument('--addtag', '-add', action='store_true', help='Add a tag to Aurora clusters , optional')
+    group.add_argument('--rmtag', '-rm', action='store_true', help='Remove a tag from Aurora clusters , optional')
     parser.add_argument('--template', '-t', help='dashboard template file name, mandatory', default='Aurora_monitor_DashboardBody.json', required=False)
-    parser.add_argument('--dashName', '-n', help='dashboard template name in aws console, optional', required=True)
+    parser.add_argument('--dashName', '-n', help='dashboard template name in aws console, optional', required=False)
     parser.add_argument('--business', '-b', help='business name which to be displayed as cloudwatch dashboard name, optional', required=False)
-    parser.add_argument('--clusterId', '-c', help='Aurora DB cluster identifier in AWS', required=False)
+    parser.add_argument('--clusterId', '-c', help='Aurora DB cluster identifier in AWS, if tagging or removing tag, can be input like cluster1,cluster2,cluster3', required=False)
     parser.add_argument('--tag', '-tag', help='Aurora DB cluster tag in console tags, such as RG:UAT or "RG:UAT", resourcegroup:UAT', required=False)
     parser.add_argument('--region', '-r', help='The Region of Aurora DB cluster identifier, mandatory', default='ap-northeast-1', required=True)
     parser.add_argument('--service', '-s', help='The service you want to monitor , default RDS, optional', default='RDS', required=False)
-    parser.add_argument('--unload', '-u', help='Unload the dashboard template from cloudWatch , optional', required=False)
-    parser.add_argument('--init', '-i', help='Create a new dashboard in cloudWatch as local json dashboard body , optional', default=False, action='store_true')
+    parser.add_argument('--download', '-d', help='Download the dashboard template from cloudWatch , optional', required=False)
+    #parser.add_argument('--init', '-i', help='Create a new dashboard in cloudWatch as local json dashboard body , optional', default=False, action='store_true')
+    #parser.add_argument('--mark', '-m', help='Mark a tag on Aurora clusters , optional', default=False, action='store_true')
 
     args = parser.parse_args()
     return args
@@ -104,7 +110,7 @@ def addMetricIntoWidgetDict(widgetDict, srvSKU, metricName, clusterInstanceList,
         metricList.append(metricElement)
     properties['metrics'] = metricList
     widgetDict['properties'] = properties
-    print("Instance amount of Cluster is: %d, %d instances's metric %s be added this time because existed! " % (len(clusterInstanceList), (len(clusterInstanceList) - repeatNum), metricName))
+    print("Instance amount of Cluster is: %d, %d instances's metric %s be not added because exist! " % (len(clusterInstanceList), repeatNum, metricName) )
     return widgetDict 
 
 # check whether the instance's metric has been added into monitor, not to repeat adding.
@@ -243,6 +249,17 @@ def getClusterInstances(client, clusterId, region, tag):
                     break
     return instanceList
 
+def getClusterById(client, clusterId: str, region: str):
+    dbcluster = {}
+    if clusterId != None:
+        response = client.describe_db_clusters(
+            DBClusterIdentifier = clusterId,
+            Marker = 'string'
+            )
+        dbclusters = response['DBClusters']
+        dbcluster = dbclusters[0] if len(dbclusters) > 0 else {}
+    return dbcluster
+
 '''metric name is from customer needs, such as [CPUUtilization, SelectLatency, InsertLatency,
    UpdateLatency, DeleteLatency, FreeableMemory, WriteIOPS, ReadIOPS]
  '''
@@ -283,25 +300,96 @@ def initDashboardWidgets(templateWidgets, srvSKU, clusterInstanceList, region):
         initWidgets = updateWidgetJson(templateWidgets, srvSKU, metricName, clusterInstanceList, region, True)
     return initWidgets
 
+def getClustersByIds(client, clusterIds, region):
+    if clusterIds is None:
+        print("Error: no clusterId be input, exit tagging/marking!")
+        exit()
+    clusterIdList = clusterIds.split(",")
+    clusters = []
+    for j in range(len(clusterIdList)):
+        clusterId = clusterIdList[j]
+        clusters.append(getClusterById(client, clusterId, region))
+    return clusters
+
+# tag all clusters user input
+def taggingClustersWithTag(clusterIds, region, tag):
+    tagPair = tag.split(":",1)
+    key = tagPair[0]
+    value = tagPair[1]
+    client = getClient('rds', region)
+    clusters = getClustersByIds(client, clusterIds, region)
+    print("You have %d RDS clusters want to tag." % len(clusters))
+    x = 0
+    for i in range(len(clusters)):
+        cluster = clusters[i]
+        clusterArn = cluster.get("DBClusterArn")
+        client.add_tags_to_resource(
+            ResourceName = clusterArn,
+            Tags=[
+                {
+                    'Key': key,
+                    'Value': value
+                },
+            ]
+        )
+        x = x + 1
+    print("%d RDS clusters have been tagged!" % x)
+
+def removeTagForClusters(clusterIds, region, tag):
+    tagPair = tag.split(":",1)
+    key = tagPair[0]
+    client = getClient('rds', region)
+    clusters = getClustersByIds(client, clusterIds, region)
+    print("You have %d RDS clusters to remove tag." % len(clusters))
+    x = 0
+    for i in range(len(clusters)):
+        cluster = clusters[i]
+        clusterArn = cluster.get("DBClusterArn")
+        client.remove_tags_from_resource(
+            ResourceName = clusterArn,
+            TagKeys=[
+                key,
+            ],
+        )
+        x = x + 1
+    print("%d RDS clusters'tag %s have been removed!" % (x, tag))
+
 srvSKU = 'AWS/RDS'
 # parameters check
 args = args_parse()
 clusterId = args.clusterId
 tag = args.tag
 region = args.region
-unloadFile =  args.unload
+unloadFile =  args.download
 isInit = args.init
+isUpdate = args.update
 dashName = args.dashName
-print("isInit = ", args.init)
-if isInit:
+isTagging = args.addtag
+removeTag = args.rmtag
+print("isInit = ", args.init) if isInit else print("")
+print("isUpdate = ", args.update) if isUpdate else print("")
+print("isTagging = ", args.addtag) if isTagging else print("")
+print("removeTag = ", args.rmtag) if removeTag else print("")
+
+
+if isInit or isTagging or removeTag:
     # clusterID is necessary in init
     if clusterId is None:
-        print("Parameters Error: clusterId is needed in init mode!")
+        print("Parameters Error: clusterId is needed in init mode or marking tag mode!")
+        exit()
+    if (isTagging or removeTag ) and tag is None:
+        print("Parameters Error: --tag is needed in mark tag mode!")
         exit()
 else:
+    # update mode , clusterId or tags is needed
     if clusterId is None and tag is None:
-        print("Parameters Error: Ether clusterId or tag is necesary!")
+        print("Parameters Error: Ether clusterId or tag is necesary when update dashboard!")
         exit()
+#dashboard Name can be None only when tagging clusters
+if dashName is None and (isInit or isUpdate):
+        print("Parameters Error: dashboard Name is necesary when init or update dashboard!")
+        exit()
+
 if tag != None:
     tags = tag.split(":",1)
     if len(tags) < 2:
@@ -309,6 +397,12 @@ if tag != None:
         exit()
 
 if __name__ == '__main__':
+    if isTagging:
+        taggingClustersWithTag(clusterId, region, tag)
+        exit()
+    if removeTag:
+        removeTagForClusters(clusterId, region, tag)
+        exit()
     # get template of dashboard'
     client = getClient('rds', region)
     # step2. get clusterInstanceList, [{'Role': 'WRITER', 'DBClusterIdentifier': 'aurora-1', 'DBInstanceIdentifier': 'aurora-1-primary'},{'Role': 'READER', 'DBClusterIdentifier': 'aurora-1', 'DBInstanceIdentifier': 'aurora-1-replica1'}]
@@ -318,7 +412,7 @@ if __name__ == '__main__':
     except client.exceptions.DBClusterNotFoundFault as e:
         print("Your RDS cluster not found: %s" % clusterId)
         exit()
-    print("Your RDS cluster size: %d" % len(clusterInstanceList))
+    print("Your RDS cluster have %d instances." % len(clusterInstanceList))
     if len(clusterInstanceList) == 0:
         print("Your RDS cluster has no instances: %s" % clusterId)
         exit()
@@ -347,25 +441,24 @@ if __name__ == '__main__':
             updateDashboard(client, dashName, createDashboardBody(initWidgets))
             print("the dashboard %s created in cloudWatch." % dashName)
         exit()
-
-    ############### if not init, add metrics for cluster
-    # step1. download template from cloudWatch dashboard
-    client = getClient('cloudwatch', region)
-    try:
-        curWidgets = getConsoleWidgets(client, dashName, region)
-    except Exception as e:
-        print(e)
-        exit()
-    # optional, dump dashboard to a local json file, and exit
-    if unloadFile is not None:
-        writeTemplateWidgets(unloadFile, curWidgets)
-        print("Unload template compete: %s" % unloadFile)
-        exit()
-    # step3. add clusterInstanceList's metric one by one into curWidgets 
-    metriList = buildAllMetricList(curWidgets, srvSKU)
-    for metricName in metriList:
-        curWidgets = updateWidgetJson(curWidgets, srvSKU, metricName, clusterInstanceList, region, isInit)
-    # step4. update dashboard
-    updateDashboard(client, dashName, createDashboardBody(curWidgets))
-    #res = getDashboard(client, dashName)
-    #print("new dashboardBody: ", res['DashboardBody'])
+    if isUpdate:
+        ############### if not init, add metrics for cluster
+        # step1. download template from cloudWatch dashboard
+        client = getClient('cloudwatch', region)
+        try:
+            curWidgets = getConsoleWidgets(client, dashName, region)
+        except Exception as e:
+            print(e)
+            exit()
+        # optional, dump dashboard to a local json file, and exit
+        if unloadFile is not None:
+            writeTemplateWidgets(unloadFile, curWidgets)
+            print("Unload template compete: %s" % unloadFile)
+            exit()
+        # step3. add clusterInstanceList's metric one by one into curWidgets 
+        metriList = buildAllMetricList(curWidgets, srvSKU)
+        for metricName in metriList:
+            curWidgets = updateWidgetJson(curWidgets, srvSKU, metricName, clusterInstanceList, region, isInit)
+        # step4. update dashboard
+        updateDashboard(client, dashName, createDashboardBody(curWidgets))
+        #print("new dashboardBody: ", res['DashboardBody'])
