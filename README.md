@@ -16,10 +16,15 @@ python dashboard_custom.py --init --dashName <new dashboard name you want> --clu
 Info: you must specify a cluster when you init a new dashboard.
 2. add a cluster into old dashboard
 ```
-python dashboard_custom.py --dashName <old dashboard name you want> --clusterId <a new aurora cluster id> --region ap-northeast-1
+python dashboard_custom.py --update --dashName <old dashboard name you want> --clusterId <a new aurora cluster id> --region ap-northeast-1
 ```
 3. add all clusters into old dashboard by scanning the tags in your RDS clusters
 ```
-python dashboard_custom.py --dashName <old dashboard name you want> --tag "ResourceGroup:pre" --region ap-northeast-1 
+python dashboard_custom.py --update --dashName <old dashboard name you want> --tag "ResourceGroup:pre" --region ap-northeast-1 
 ```
 Info: the tags you input in --tag option have to be tagged on Aurora clusters before.
+4. add a tag for some clusters
+```
+python dashboard_custom.py --addtag --clusterId <clusterid1,clusterid2,clusterid3> --tag "ResourceGroup:pre" --region ap-northeast-1 
+```
+Info: Remove tag from Aurora clusters by replacing action option to --rmtag.
