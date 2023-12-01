@@ -16,7 +16,7 @@ For details, refer to https://docs.aws.amazon.com/cli/latest/userguide/cli-confi
 ```
 python dashboard_custom.py --init --dashName <new dashboard name you want> --clusterId <a aurora cluster id> --region <region where your Aurora is>
 ```  
-Info: you must specify a cluster when you init a new dashboard.  
+Info: you must specify a cluster when you init a new dashboard. \
 2. add a cluster into old dashboard
 ```
 python dashboard_custom.py --update --dashName <old dashboard name you want> --clusterId <a new aurora cluster id> --region ap-northeast-1
@@ -25,7 +25,7 @@ python dashboard_custom.py --update --dashName <old dashboard name you want> --c
 ```
 python dashboard_custom.py --update --dashName <old dashboard name you want> --tag "ResourceGroup:pre" --region ap-northeast-1 
 ```
-Info: the tags you input in --tag option have to be tagged on Aurora clusters before.  
+Info: the tags you input in --tag option have to be tagged on Aurora clusters before. \
 4. add a tag for some clusters
 ```
 python dashboard_custom.py --addtag --clusterId <clusterid1,clusterid2,clusterid3> --tag "ResourceGroup:pre" --region ap-northeast-1 
