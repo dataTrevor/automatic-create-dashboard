@@ -1,8 +1,8 @@
 ########################
 #### Env: python3.9
-#### Function1: Use the default template(we defined it as most customers need), help customer to create a new dashboard, and add a instance or many instances of a cluster
+#### Function1: Use the default template(we defined it as most customers need), help customer to create a new CloudWatch dashboard, and add a instance or many instances of a cluster
 ###  into each widget of the created dashboard. --init option
-#### Function2: Customer created a dashboard from aws cloudwatch console or Function1, and selected one RDS cluster as template, after that, customer can add a instance or many instances
+#### Function2: Customer created a dashboard as template from AWS CloudWatch console or Function1, after that, customer can add a instance or many instances
 ###  into each widget of the dashboard.
 #### Function3: Download the cloudWatch dashboard to a local json file as template. --download option
 #### prerequisite: you need configure ak/sk in AWS CLI first, and make sure you have privileges to call aws SDK api.
@@ -12,6 +12,7 @@ import boto3
 import json
 import re
 import argparse
+from typing import List, Dict
 
 def args_parse():
     parser = argparse.ArgumentParser(description='Create CloudWatch Dashboard automatically')
@@ -28,24 +29,21 @@ def args_parse():
     parser.add_argument('--region', '-r', help='The Region of Aurora DB cluster identifier, mandatory', default='ap-northeast-1', required=True)
     parser.add_argument('--service', '-s', help='The service you want to monitor , default RDS, optional', default='RDS', required=False)
     parser.add_argument('--download', '-d', help='Download the dashboard template from cloudWatch , optional', required=False)
-    #parser.add_argument('--init', '-i', help='Create a new dashboard in cloudWatch as local json dashboard body , optional', default=False, action='store_true')
-    #parser.add_argument('--mark', '-m', help='Mark a tag on Aurora clusters , optional', default=False, action='store_true')
-
     args = parser.parse_args()
     return args
 
-def getClient(srvName, region_name):
+def getClient(srvName: str, region_name: str):
     client = boto3.client(srvName, region_name)
     return client
 
 # get cloudWatch dashboard
-def getDashboard(client, dashName):
+def getDashboard(client, dashName: str):
     response = client.get_dashboard(
         DashboardName = dashName
     )
     return response
 # update dashboard as local dashboard body
-def updateDashboard(client, dashName, dashboardBody):
+def updateDashboard(client, dashName: str, dashboardBody: str):
     try:
         client.put_dashboard(
             DashboardName = dashName,
@@ -54,13 +52,13 @@ def updateDashboard(client, dashName, dashboardBody):
     except Exception as e:
         print(e)
 # transfer Json object to String, as required by AWS SDK
-def createDashboardBody(widgets):
+def createDashboardBody(widgets) -> str:
     dashboardBodyDict = {'widgets': widgets}
     dashboardBody = json.dumps(dashboardBodyDict)
     return dashboardBody
 
 # match metric(like CPUUtilization) to remove old metricDict from Widgets
-def matchMetricWidgetInWidgets(curWidgets, srvSKU, metricName):
+def matchMetricWidgetInWidgets(curWidgets: List, srvSKU: str, metricName: str):
     matchId = None
     for i in range(len(curWidgets)):
         properties = curWidgets[i].get('properties')
@@ -75,7 +73,7 @@ def matchMetricWidgetInWidgets(curWidgets, srvSKU, metricName):
     return matchId
 
 # add metrics of instances into WidgetDict
-def addMetricIntoWidgetDict(widgetDict, srvSKU, metricName, clusterInstanceList, region, lableDetailList, isInit: bool = False):
+def addMetricIntoWidgetDict(widgetDict: Dict, srvSKU: str, metricName: str, clusterInstanceList, region: str, lableDetailList, isInit: bool = False) -> Dict:
     properties = widgetDict.get('properties')
     metricList = properties.get('metrics')
     # delete template's metric from widgetDict when init a new dashboard
@@ -110,11 +108,11 @@ def addMetricIntoWidgetDict(widgetDict, srvSKU, metricName, clusterInstanceList,
         metricList.append(metricElement)
     properties['metrics'] = metricList
     widgetDict['properties'] = properties
-    print("Instance amount of Cluster is: %d, %d instances's metric %s be not added because exist! " % (len(clusterInstanceList), repeatNum, metricName) )
+    print("Instance amount of Cluster is: %d, %d instances's metric %s be not added because duplicate! " % (len(clusterInstanceList), repeatNum, metricName) )
     return widgetDict 
 
 # check whether the instance's metric has been added into monitor, not to repeat adding.
-def findDuplicateMetric(lableDetailList, metricName, clusterId, instanceId, role, region):
+def findDuplicateMetric(lableDetailList: List, metricName: str, clusterId: str, instanceId: str, role: str, region: str) -> bool:
     isDuplicate = False
     # labelDetail is like: ap-northeast-1-CPUUtilization-aurora-2-standard-WRITER
     labelDetail =  region + '-' + metricName + '-' + instanceId + '-' +role
@@ -124,7 +122,7 @@ def findDuplicateMetric(lableDetailList, metricName, clusterId, instanceId, role
     return isDuplicate
 
 # build a label list of an online widget, provide a label list to avoid duplicate metric of one instance
-def buildLabelListFromEachWidget(widgetDict, metricName):
+def buildLabelListFromEachWidget(widgetDict: Dict, metricName: str) -> List:
     labelList = []
     properties = widgetDict.get('properties')
     metrics = properties.get('metrics')
@@ -144,7 +142,7 @@ def buildLabelListFromEachWidget(widgetDict, metricName):
     return labelList
 
 # build a label list of online widgets of dashboard
-def buildAllLabelList(onlineWidgets, metricName):
+def buildAllLabelList(onlineWidgets: List, metricName: str) -> List:
     labelList = []
     for i in range(len(onlineWidgets)):
         properties = onlineWidgets[i].get('properties')
@@ -159,7 +157,7 @@ def buildAllLabelList(onlineWidgets, metricName):
     return labelList
 
 # build a widget(Metric) list of online widgets of dashboard template
-def buildAllMetricList(onlineWidgets, srvSKU):
+def buildAllMetricList(onlineWidgets: List, srvSKU: str) -> List:
     metricList = []
     for i in range(len(onlineWidgets)):
         properties = onlineWidgets[i].get('properties')
@@ -179,7 +177,7 @@ def buildAllMetricList(onlineWidgets, srvSKU):
     Parameters detail
     clusterInstanceList: it's a list to be monitored and added into Widgets, element is a dict {'Role': 'WRITER', 'DBClusterIdentifier': 'aurora-1'}
 '''
-def updateWidgetJson(curWidgets, srvSKU, metricName, clusterInstanceList, region, isInit: bool = False):
+def updateWidgetJson(curWidgets: List, srvSKU: str, metricName: str, clusterInstanceList, region: str, isInit: bool = False) -> List:
     machtchedWidgetId = matchMetricWidgetInWidgets(curWidgets, srvSKU, metricName)
     if machtchedWidgetId is None:
         print("Widget not found for this metric: %s", metricName)
@@ -195,7 +193,7 @@ def updateWidgetJson(curWidgets, srvSKU, metricName, clusterInstanceList, region
     return curWidgets
 
 # check tag(RG:pre) exists in RDS cluster TagPair like {'Key': 'RG', 'Value': 'pre'}
-def tagMatched(tagInput: str, tagPair):
+def tagMatched(tagInput: str, tagPair: Dict) -> bool:
     matched = False
     tags = tagInput.split(":",1)
     key = tags[0]
@@ -205,7 +203,7 @@ def tagMatched(tagInput: str, tagPair):
     return matched
 
 # dbInstances is the Json in DBClusterMembers, return a list[{"DBInstanceIdentifier":"aurora-test-instance-1","DBClusterIdentifier": "aurora-test","role":"WRITER"}, ]
-def convertClusterInstancesToInstanceList(dbInstances, clusterId):
+def convertClusterInstancesToInstanceList(dbInstances: List, clusterId: str) -> List:
     instanceList = []
     for i in range(len(dbInstances)):
             dbInstanceMap = {}
@@ -219,7 +217,7 @@ def convertClusterInstancesToInstanceList(dbInstances, clusterId):
     return instanceList
 
 # get Aurora Instance list from AWS SDK by clusterID or tag, not for RDS instance!
-def getClusterInstances(client, clusterId, region, tag):
+def getClusterInstances(client, clusterId: str, region: str, tag: str) -> List:
     instanceList = []
     dbclusters = []
     dbInstances = []
@@ -237,7 +235,7 @@ def getClusterInstances(client, clusterId, region, tag):
             Marker = 'string'
             )
         dbclusters = response['DBClusters']
-        print(dbclusters)
+        #print(dbclusters)
         for i in (range(len(dbclusters))):
             dbcluster = dbclusters[i]
             tagList = dbcluster.get("TagList")
@@ -249,7 +247,7 @@ def getClusterInstances(client, clusterId, region, tag):
                     break
     return instanceList
 
-def getClusterById(client, clusterId: str, region: str):
+def getClusterById(client, clusterId: str, region: str) -> Dict:
     dbcluster = {}
     if clusterId != None:
         response = client.describe_db_clusters(
@@ -265,7 +263,7 @@ def getClusterById(client, clusterId: str, region: str):
  '''
 # metricName = 'CPUUtilization'
 # get Widgets from aws cloud watch
-def getConsoleWidgets(client, dashName, region_name):
+def getConsoleWidgets(client, dashName: str, region_name: str) -> List:
     # step1. get dashboard template
     response = getDashboard(client, dashName)
     dashboardBody = response['DashboardBody']
@@ -273,7 +271,7 @@ def getConsoleWidgets(client, dashName, region_name):
     #print(response['DashboardBody'])
     return bodyJson['widgets']
 
-def listAllDashboards(client, dashName, region_name):
+def listAllDashboards(client, dashName: str, region_name: str):
     response = client.list_dashboards(
         DashboardNamePrefix=dashName
     )
@@ -281,7 +279,7 @@ def listAllDashboards(client, dashName, region_name):
     return response['DashboardEntries']
 
 # open the local json config
-def getTemplateWidgets():
+def getTemplateWidgets() -> List:
     f = open('Aurora_monitor_DashboardBody.json','r')
     widgetsList = json.load(f)
     f.close()
@@ -294,13 +292,13 @@ def writeTemplateWidgets(unloadFile, curWidgets):
         json.dump(curWidgets, f)
 
 # create a new widgets with a real clusterId and instances
-def initDashboardWidgets(templateWidgets, srvSKU, clusterInstanceList, region):
+def initDashboardWidgets(templateWidgets: List, srvSKU: str, clusterInstanceList: List, region: str) -> List:
     metriList = buildAllMetricList(templateWidgets, srvSKU)
     for metricName in metriList:
         initWidgets = updateWidgetJson(templateWidgets, srvSKU, metricName, clusterInstanceList, region, True)
     return initWidgets
 
-def getClustersByIds(client, clusterIds, region):
+def getClustersByIds(client, clusterIds: str, region: str) -> List:
     if clusterIds is None:
         print("Error: no clusterId be input, exit tagging/marking!")
         exit()
@@ -312,7 +310,7 @@ def getClustersByIds(client, clusterIds, region):
     return clusters
 
 # tag all clusters user input
-def taggingClustersWithTag(clusterIds, region, tag):
+def taggingClustersWithTag(clusterIds: str, region: str, tag: str):
     tagPair = tag.split(":",1)
     key = tagPair[0]
     value = tagPair[1]
@@ -335,7 +333,7 @@ def taggingClustersWithTag(clusterIds, region, tag):
         x = x + 1
     print("%d RDS clusters have been tagged!" % x)
 
-def removeTagForClusters(clusterIds, region, tag):
+def removeTagForClusters(clusterIds: str, region: str, tag: str):
     tagPair = tag.split(":",1)
     key = tagPair[0]
     client = getClient('rds', region)
