@@ -12,21 +12,21 @@ Follow the prompts and it will generate configuration files in the correct locat
 For details, refer to https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html#cli-configure-files-methods
 
 # How to use
-## 1. init a new dashboard with default template
+## 1. Init a new dashboard with default template
 ```
 python dashboard_custom.py --init --dashName <new dashboard name you want> --clusterId <a aurora cluster id> --region <region where your Aurora is>
 ```  
 Info: you must specify a cluster when you init a new dashboard. \
-## 2. add a cluster into old dashboard
+## 2. Add a cluster into old dashboard
 ```
 python dashboard_custom.py --update --dashName <old dashboard name you want> --clusterId <a new aurora cluster id> --region ap-northeast-1
 ```  
-## 3. add all clusters into old dashboard by scanning the tags in your RDS clusters
+## 3. Add the clusters with the specific tags on RDS clusters into old dashboard
 ```
 python dashboard_custom.py --update --dashName <old dashboard name you want> --tag "ResourceGroup:pre" --region ap-northeast-1 
 ```
 Info: the tags you input in --tag option have to be tagged on Aurora clusters before. \
-## 4. add or remove a tag for some clusters
+## 4. Add or remove a tag for some clusters
 ```
 python dashboard_custom.py --addtag --clusterId <clusterid1,clusterid2,clusterid3> --tag "ResourceGroup:pre" --region ap-northeast-1 
 ```
