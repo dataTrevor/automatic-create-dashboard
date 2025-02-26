@@ -7,7 +7,10 @@ It's average counter per minute, for all metrics;
 metric_list = ['BytesUsedForCache','CurrItems','NetworkBytesIn','NetworkBytesOut','ReplicationBytes','GetTypeCmds','SetTypeCmds','EvalBasedCmds']
 create time: 2025-02-26
 usage:
-must specify 4 parameters: region, cluster name, cluster_enabled: yes or no, metrics_duraion: week, day
+ - must specify 4 parameters: region, cluster name, cluster_enabled: yes or no, metrics_duraion: week, day
+   -- python get_ecache_metrics.py ap-northeast-1 test-3-cluster yes day
+ - for cluster_enabled:
+   --  cluster_enabled == no if you specify a cluster name having a single node or a node name of cluster, otherwise cluster_enabled == yes
 Precondition:
 1/install python3, boto3
 2/configure your AWS credentials using the AWS CLI or environment variables.
@@ -73,7 +76,7 @@ def get_replication_group_metrics(replication_group_id, metric_name, start_time,
 
     return metrics, all_datapoints
 
-# get nodes of elasticache cluster-non-enabled
+# get nodes of elasticache one node or elasticache single node cluster
 def get_ecache_node_ids(cluster_id, region):
     # Create an ElastiCache client
     elasticache = boto3.client('elasticache', region_name=region)
@@ -84,7 +87,6 @@ def get_ecache_node_ids(cluster_id, region):
             CacheClusterId=cluster_id,
             ShowCacheNodeInfo=True
         )
-        
         # Extract node IDs from the response
         if response['CacheClusters']:
             cluster = response['CacheClusters'][0]
